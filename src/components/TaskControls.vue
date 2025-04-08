@@ -72,6 +72,40 @@
     </div>
     
     <div class="control-section">
+    <h3 class="section-title">Solve Puzzle</h3>
+
+    <div class="timer-display" v-if="timerStarted || elapsedTime > 0"> Time: {{ formattedTimer }}
+    </div>
+
+     <button
+       class="btn btn-primary start-btn"
+       @click="$emit('start-timer')"
+       :disabled="timerRunning" >
+       <span class="material-icons">timer</span> Start Solving
+     </button>
+
+    <button
+      class="btn btn-success validate-btn"
+      @click="$emit('validate-solution')"
+      :disabled="!timerRunning" >
+      <span class="material-icons">check_circle</span>
+      Submit Solution
+    </button>
+    </div>
+    <div v-if="completionInfo.completed" class="completion-info">
+    <p>
+        <span class="material-icons success-icon">check_circle</span>
+        Completed in: {{ formatTime(completionInfo.time) }}
+    </p>
+    <button class="btn btn-small" @click="showTranscript = !showTranscript">
+        <span class="material-icons">description</span> {{ showTranscript ? 'Hide' : 'Show' }} Transcript
+    </button>
+    <div v-if="showTranscript" class="transcript-display">
+        <h4>Transcript:</h4>
+        <pre>{{ completionInfo.transcript }}</pre>
+    </div>
+  </div>
+    <div class="control-section">
       <h3 class="section-title">Load Task</h3>
       
       <div class="load-options">
@@ -165,7 +199,10 @@ export default {
     arcVersion: {
       type: String,
       default: 'ARC 2'
-    }
+    },
+    timerRunning: { type: Boolean, default: false },
+    timerStarted: { type: Boolean, default: false },
+    formattedTimer: { type: String, default: '00:00' }
   },
   emits: [
     'previous-task', 
@@ -176,14 +213,21 @@ export default {
     'previous-test',
     'next-test',
     'validate-solution',
-    'show-solution'
+    'show-solution',
+    'start-timer',
+    'validate-solution',
   ],
   setup(props, { emit }) {
     const store = useStore()
     const taskIndex = ref(props.currentTaskIndex >= 0 ? props.currentTaskIndex + 1 : 1) // Convert to 1-indexed
     const subset = ref(props.currentSubset)
     const selectedArcVersion = ref(store.state.arcVersion)
-    
+    import { computed } from 'vue';
+    import { useStore } from 'vuex';
+
+    const store = useStore();
+    const currentTaskId = computed(() => `<span class="math-inline">\{props\.arcVersion\}\-</span>{props.currentSubset}-${props.currentTaskIndex}`); // Adjust based on actual props/state structure
+    const completionInfo = computed(() => store.getters.getTaskCompletionData(currentTaskId.value));
     onMounted(() => {
       // Update the task index when props change
       if (props.currentTaskIndex >= 0) {

@@ -59,24 +59,26 @@
     
     <div class="main-container" v-else>
       <div class="sidebar">
-        <TaskControls 
-          :task-name="taskName"
-          :current-task-index="currentTaskIndex"
-          :current-subset="currentSubset"
-          :current-test-index="currentTestPairIndex"
-          :total-test-count="testPairs.length"
-          :total-task-count="totalTaskCount"
-          :arc-version="arcVersionName"
-          @previous-task="loadPreviousTask"
-          @next-task="loadNextTask"
-          @random-task="loadRandomTask"
-          @load-task="loadSpecificTask"
-          @load-file="handleFileUpload"
-          @previous-test="previousTestInput"
-          @next-test="nextTestInput"
-          @validate-solution="validateSolution"
-          @show-solution="showSolution"
-        />
+        <TaskControls
+        :task-name="taskName"
+        :current-task-index="currentTaskIndex"
+        :current-subset="currentSubset"
+        :current-test-index="currentTestPairIndex"
+        :total-test-count="testPairs.length"
+        :total-task-count="totalTaskCount"
+        :arc-version="arcVersionName"
+        :timer-running="timerRunning"
+        :timer-started="startTime !== null" :formatted-timer="formattedElapsedTime"
+        @previous-task="loadPreviousTask"
+        @next-task="loadNextTask"
+        @random-task="loadRandomTask"
+        @load-task="loadSpecificTask"
+        @load-file="handleFileUpload"
+        @previous-test="previousTestInput"
+        @next-test="nextTestInput"
+        @start-timer="startTimer" @validate-solution="validateSolution"
+        @show-solution="showSolution"
+    />
       </div>
       
       <div class="main-content">
@@ -195,6 +197,72 @@ export default {
       type: 'info',
       duration: 3000
     })
+    
+    const isTranscribing = ref(false);
+    const transcript = ref('');
+    let recognition = null; // Holds the SpeechRecognition instance
+
+    // Inside setup() in PuzzleView.txt
+    const timerRunning = ref(false);
+    const startTime = ref(null);
+    const elapsedTime = ref(0); // Store elapsed time in seconds
+    let timerInterval = null;
+
+    // Computed property for display format (e.g., MM:SS)
+    const formattedElapsedTime = computed(() => {
+      const totalSeconds = Math.floor(elapsedTime.value);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      return `<span class="math-inline">\{String\(minutes\)\.padStart\(2, '0'\)\}\:</span>{String(seconds).padStart(2, '0')}`;
+    });
+
+    // Inside setup() in PuzzleView.txt
+    const startTimer = () => {
+      if (timerRunning.value) return; // Prevent multiple starts
+      startTime.value = Date.now();
+      startTranscription()
+      elapsedTime.value = 0; // Reset elapsed time when starting
+      timerRunning.value = true;
+      timerInterval = setInterval(() => {
+        elapsedTime.value = (Date.now() - startTime.value) / 1000;
+      }, 1000); // Update every second
+      console.log("Timer started"); // Add log for debugging
+      // Potentially start speech recognition here too
+      startTranscription(); // We'll define this later
+    };
+
+    const stopTimer = () => {
+      if (!timerRunning.value) return;
+      stopTranscription()
+      clearInterval(timerInterval);
+      timerRunning.value = false;
+      elapsedTime.value = (Date.now() - startTime.value) / 1000; // Final precise time
+      console.log("Timer stopped. Elapsed:", elapsedTime.value); // Log final time
+      // Potentially stop speech recognition here
+      stopTranscription(); // We'll define this later
+      return elapsedTime.value; // Return the final time
+    };
+
+    const resetTimer = () => {
+      stopTimer(); // Ensure it's stopped first
+      elapsedTime.value = 0;
+      startTime.value = null;
+        console.log("Timer reset");
+    };
+
+    // Ensure timer stops when the component is unmounted
+    onUnmounted(() => {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+      }
+    });
+
+    // Reset timer when a new task is loaded
+    watch(() => store.state.taskName, () => {
+      resetTimer();
+      // Also reset transcription state if needed
+      resetTranscription();
+    });
     
     // Additional state for ARC version
     const selectedArcVersion = ref(store.state.arcVersion)
@@ -332,37 +400,36 @@ export default {
       store.commit('resetOutputGrid')
       showNotification('Output grid reset', 'info')
     }
-    
-    const validateSolution = () => {
-      if (!currentOutputGrid.value || !store.getters.currentTestOutput) {
-        showNotification('No solution to validate', 'error')
-        return
+
+    const validateSolution = async () => {
+      if (!currentOutputGrid.value || !timerRunning.value) {
+          // Optional: Show notification if timer not started
+          showNotification('Please start the timer before submitting.', 'info');
+          return; // Don't validate if timer isn't running
       }
-      
-      const submitted = currentOutputGrid.value
-      const expected = store.getters.currentTestOutput
-      
-      if (submitted.length !== expected.length) {
-        showNotification('Wrong solution. Grid dimensions do not match.', 'error')
-        return
+
+      const expectedOutput = testPairs.value[currentTestPairIndex.value]?.output;
+      const userOutput = currentOutputGrid.value; // Assuming this is reactive
+
+      // Compare userOutput with expectedOutput (implement grid comparison logic if needed)
+      const isCorrect = JSON.stringify(userOutput) === JSON.stringify(expectedOutput);
+
+      if (isCorrect) {
+        const finalTime = stopTimer(); // Stop the timer and get final time
+        const finalTranscript = getTranscript(); // Get the transcript (defined below)
+
+        // *** SAVE DATA HERE (See Section 3) ***
+        await saveCompletionData(finalTime, finalTranscript);
+
+        getTranscript()
+        await store.dispatch('saveCompletion', { time: finalTime, transcript: finalTranscript });
+        showNotification('Correct! Solution submitted.', 'success');
+        // Maybe load next task or show completion state?
+      } else {
+        showNotification('Incorrect solution. Try again.', 'error');
+        // Timer continues running if incorrect
       }
-      
-      for (let i = 0; i < expected.length; i++) {
-        if (submitted[i].length !== expected[i].length) {
-          showNotification('Wrong solution. Grid dimensions do not match.', 'error')
-          return
-        }
-        
-        for (let j = 0; j < expected[i].length; j++) {
-          if (submitted[i][j] !== expected[i][j]) {
-            showNotification('Wrong solution. Try again!', 'error')
-            return
-          }
-        }
-      }
-      
-      showNotification('Correct solution! Great job!', 'success', 5000)
-    }
+    };
     
     const showSolution = () => {
       if (!store.getters.currentTestOutput) {
@@ -406,8 +473,98 @@ export default {
       }
     }
     
+    // --- Web Speech API Implementation ---
+    const setupSpeechRecognition = () => {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        console.warn("Speech Recognition not supported by this browser.");
+        // Optionally disable transcription features
+        return;
+      }
+
+      recognition = new SpeechRecognition();
+      recognition.continuous = true; // Keep listening even after pauses
+      recognition.interimResults = true; // Get results as they come
+      recognition.lang = 'en-US'; // Set language
+
+      recognition.onresult = (event) => {
+        let interimTranscript = '';
+        let finalTranscript = transcript.value; // Append to existing final transcript
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript + ' ';
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+        // Could display interimTranscript somewhere if desired
+        transcript.value = finalTranscript; // Update the final transcript state
+        console.log("Transcript updated:", transcript.value); // Log update
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        isTranscribing.value = false;
+        // Handle errors, e.g., 'not-allowed' if permission denied
+        if (event.error === 'not-allowed') {
+          showNotification('Microphone access denied. Cannot transcribe.', 'error');
+        }
+      };
+
+      recognition.onend = () => {
+        console.log("Speech recognition ended.");
+        // Restart recognition if it stops unexpectedly while it should be running
+        if (isTranscribing.value) {
+          console.log("Restarting recognition...");
+          try {
+              recognition.start();
+          } catch(e) {
+              console.error("Error restarting recognition:", e);
+              isTranscribing.value = false; // Stop trying if it errors out
+          }
+        }
+      };
+    };
+
+    const startTranscription = () => {
+      if (!recognition) {
+          console.warn("Recognition not set up.");
+          return; // Don't start if not supported/initialized
+      }
+      if (isTranscribing.value) return;
+
+      // Request microphone permission implicitly by starting
+      transcript.value = ''; // Clear previous transcript
+      try {
+          recognition.start();
+          isTranscribing.value = true;
+          console.log("Transcription started");
+      } catch (e) {
+          console.error("Error starting speech recognition:", e);
+          showNotification('Could not start transcription. Check microphone permissions.', 'error');
+      }
+    };
+
+    const stopTranscription = () => {
+      if (!recognition || !isTranscribing.value) return;
+      recognition.stop();
+      isTranscribing.value = false;
+      console.log("Transcription stopped");
+    };
+
+    const resetTranscription = () => {
+      stopTranscription();
+      transcript.value = '';
+    }
+
+    const getTranscript = () => {
+      return transcript.value;
+    };
+
     // Setup resize listener
     onMounted(() => {
+      setupSpeechRecognition();
       // Preload metadata for both splits
       store.dispatch('loadTasksMetadata', 'training')
       store.dispatch('loadTasksMetadata', 'evaluation')

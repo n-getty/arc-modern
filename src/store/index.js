@@ -15,6 +15,7 @@ const API_ENDPOINTS = {
 
 export default createStore({
   state: {
+    completionData: {},
     currentTask: null,
     taskName: '',
     trainExamples: [],
@@ -30,6 +31,13 @@ export default createStore({
     arcVersion: 2, // Default to ARC 2
   },
   getters: {
+    getTaskCompletionData: (state) => (taskId) => {
+      // taskId format: 'version-subset-index'
+      return state.completionData[taskId] || { completed: false, time: null, transcript: null };
+   },
+    isTaskCompleted: (state) => (taskId) => {
+        return !!state.completionData[taskId]?.completed;
+    },
     currentTestInput(state) {
       if (state.testPairs.length === 0) return null
       return state.testPairs[state.currentTestPairIndex]?.input || null
@@ -46,6 +54,18 @@ export default createStore({
     }
   },
   mutations: {
+    setCompletionData(state, { taskId, data }) {
+          // taskId could be e.g., `<span class="math-inline">\{state\.arcVersion\}\-</span>{state.currentSubset}-${state.currentTaskIndex}`
+          state.completionData[taskId] = { ...data, completed: true };
+          // Persist to localStorage? (Optional but recommended)
+          localStorage.setItem('arcCompletionData', JSON.stringify(state.completionData));
+    },
+      loadCompletionData(state) {
+          const savedData = localStorage.getItem('arcCompletionData');
+          if (savedData) {
+            state.completionData = JSON.parse(savedData);
+          }
+      },
     setArcVersion(state, version) {
       state.arcVersion = version
       state.tasksMetadata = {}
@@ -146,6 +166,16 @@ export default createStore({
     }
   },
   actions: {
+    saveCompletion({ commit, state }, { time, transcript }) {
+        const taskId = `<span class="math-inline">\{state\.arcVersion\}\-</span>{state.currentSubset}-${state.currentTaskIndex}`;
+        const data = { time, transcript };
+        commit('setCompletionData', { taskId, data });
+    },
+    // Action to load saved data on app start
+    initializeStore({ commit }) {
+        commit('loadCompletionData');
+        // Could also load last task, etc.
+    },
     setArcVersion({ commit }, version) {
       commit('setArcVersion', version)
       return { success: true }
