@@ -74,7 +74,7 @@
     <div class="control-section">
     <h3 class="section-title">Solve Puzzle</h3>
 
-    <div class="timer-display" v-if="timerStarted || elapsedTime > 0"> Time: {{ formattedTimer }}
+    <div class="timer-display" v-if="timerStarted || formattedElapsedTime > 0"> Time: {{ formattedTimer }}
     </div>
 
      <button
@@ -218,16 +218,14 @@ export default {
     'validate-solution',
   ],
   setup(props, { emit }) {
-    const store = useStore()
     const taskIndex = ref(props.currentTaskIndex >= 0 ? props.currentTaskIndex + 1 : 1) // Convert to 1-indexed
     const subset = ref(props.currentSubset)
-    const selectedArcVersion = ref(store.state.arcVersion)
-    import { computed } from 'vue';
-    import { useStore } from 'vuex';
 
     const store = useStore();
-    const currentTaskId = computed(() => `<span class="math-inline">\{props\.arcVersion\}\-</span>{props.currentSubset}-${props.currentTaskIndex}`); // Adjust based on actual props/state structure
+    const selectedArcVersion = ref(store.state.arcVersion)
+    const currentTaskId = computed(() => `<span class="math-inline">{props.arcVersion}-</span>{props.currentSubset}-${props.currentTaskIndex}`); // Adjust based on actual props/state structure
     const completionInfo = computed(() => store.getters.getTaskCompletionData(currentTaskId.value));
+
     onMounted(() => {
       // Update the task index when props change
       if (props.currentTaskIndex >= 0) {
@@ -263,7 +261,10 @@ export default {
       selectedArcVersion,
       handleFileUpload,
       loadSpecificTask,
-      changeArcVersion
+      changeArcVersion,
+      completionInfo,
+      currentTaskId,
+      store,
     }
   }
 }

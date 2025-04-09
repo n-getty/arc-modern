@@ -3,7 +3,6 @@ import App from './App.vue'
 import router from './router'
 import store from './store'
 import './assets/styles/main.scss'
-import store from './store'
 
 // Dispatch initialization action after creating the app instance
 const app = createApp(App);

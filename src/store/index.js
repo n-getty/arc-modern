@@ -167,7 +167,7 @@ export default createStore({
   },
   actions: {
     saveCompletion({ commit, state }, { time, transcript }) {
-        const taskId = `<span class="math-inline">\{state\.arcVersion\}\-</span>{state.currentSubset}-${state.currentTaskIndex}`;
+        const taskId = `<span class="math-inline">{state.arcVersion}-</span>{state.currentSubset}-${state.currentTaskIndex}`;
         const data = { time, transcript };
         commit('setCompletionData', { taskId, data });
     },
