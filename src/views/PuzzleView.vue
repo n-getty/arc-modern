@@ -192,7 +192,7 @@
       const selectedSymbol = ref(0)
       const showSymbolNumbers = ref(false)
       const taskLoaded = ref(false)
-      const notificationState = ref({ // <-- Rename here
+      const notificationState = ref({ 
         show: false,
         message: '',
         type: 'info',
@@ -400,11 +400,26 @@
           // Create a unique task ID that includes the ARC version, subset, and task index
           const taskId = `${store.state.arcVersion}-${currentSubset.value}-${currentTaskIndex.value}`;
 
+          // Check if we have a username set, if not, prompt the user
+          let username = store.state.currentUser;
+          if (!username) {
+            username = await promptForUsername();
+            if (username) {
+              store.commit('setCurrentUser', username);
+            } else {
+              // User canceled, halt submission
+              startTimer(); // Restart the timer
+              showNotification('Submission canceled. Please enter a name to submit.', 'warning');
+              return;
+            }
+          }
+
           try {
             await store.dispatch('saveCompletion', { 
               time: finalTime, 
               transcript: finalTranscript,
-              taskId: taskId  // Add the task ID to identify the puzzle
+              taskId: taskId,
+              user: username
             });
             showNotification('Correct! Solution and data saved.', 'success');
           } catch (error) {
@@ -414,6 +429,14 @@
         } else {
           showNotification('Incorrect solution. Try again.', 'error');
         }
+      }
+
+      // Function to prompt user for their name
+      const promptForUsername = async () => {
+        return new Promise((resolve) => {
+          const username = prompt('Please enter your name to attribute this solution:');
+          resolve(username || ''); // Return empty string if user cancels
+        });
       }
 
       const loadInitialTask = async () => {

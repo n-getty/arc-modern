@@ -8,6 +8,15 @@
         <div class="task-name" v-if="taskName">
           <span class="arc-version">{{ arcVersion }}</span>
           <span class="subset-prefix">[{{ currentSubset }}]</span> {{ taskName }}
+          
+          <!-- Add completion status indicator here -->
+          <div v-if="completionInfo.completed" class="completion-status">
+            <span class="material-icons success-icon">check_circle</span>
+            <span class="completion-text">
+              Task Completed in {{ formatTime(completionInfo.time) }}
+              <span v-if="completionInfo.user"> by {{ completionInfo.user }}</span>
+            </span>
+          </div>
         </div>
         <div class="task-navigation" v-if="taskName">
           <div class="counter-display">
@@ -54,8 +63,6 @@
     <div class="control-section">
       <h3 class="section-title">Validate Solution</h3>
       
-      <!-- Removed duplicate submit button -->
-      
       <button 
         class="btn btn-secondary show-solution-btn" 
         @click="$emit('show-solution')"
@@ -66,40 +73,43 @@
     </div>
     
     <div class="control-section">
-    <h3 class="section-title">Solve Puzzle</h3>
+      <h3 class="section-title">Solve Puzzle</h3>
 
-    <div class="timer-display" v-if="timerStarted || formattedTimer !== '00:00'">
-      Time: {{ formattedTimer }}
+      <div class="timer-display" v-if="timerStarted || formattedTimer !== '00:00'">
+        Time: {{ formattedTimer }}
+      </div>
+
+      <button
+        class="btn btn-primary start-btn"
+        @click="$emit('start-timer')"
+        :disabled="timerRunning" >
+        <span class="material-icons">timer</span> Start Solving
+      </button>
+
+      <button
+        class="btn btn-success validate-btn"
+        @click="$emit('validate-solution')"
+        :disabled="!timerRunning" >
+        <span class="material-icons">check_circle</span>
+        Submit Solution
+      </button>
     </div>
-
-     <button
-       class="btn btn-primary start-btn"
-       @click="$emit('start-timer')"
-       :disabled="timerRunning" >
-       <span class="material-icons">timer</span> Start Solving
-     </button>
-
-    <button
-      class="btn btn-success validate-btn"
-      @click="$emit('validate-solution')"
-      :disabled="!timerRunning" >
-      <span class="material-icons">check_circle</span>
-      Submit Solution
-    </button>
-    </div>
+    
     <div v-if="completionInfo.completed" class="completion-info">
-    <p>
+      <p>
         <span class="material-icons success-icon">check_circle</span>
         Completed in: {{ formatTime(completionInfo.time) }}
-    </p>
-    <button class="btn btn-small" @click="showTranscript = !showTranscript">
+        <span v-if="completionInfo.user"> by {{ completionInfo.user }}</span>
+      </p>
+      <button class="btn btn-small" @click="showTranscript = !showTranscript">
         <span class="material-icons">description</span> {{ showTranscript ? 'Hide' : 'Show' }} Transcript
-    </button>
-    <div v-if="showTranscript" class="transcript-display">
+      </button>
+      <div v-if="showTranscript" class="transcript-display">
         <h4>Transcript:</h4>
         <pre>{{ completionInfo.transcript }}</pre>
+      </div>
     </div>
-  </div>
+    
     <div class="control-section">
       <h3 class="section-title">Load Task</h3>
       
@@ -156,6 +166,18 @@
           </div>
         </div>
       </div>
+    </div>
+    
+    <!-- New section for data export -->
+    <div class="control-section">
+      <h3 class="section-title">Data Management</h3>
+      <button 
+        class="btn btn-secondary export-btn" 
+        @click="exportData"
+      >
+        <span class="material-icons">download</span> 
+        Export All Completion Data
+      </button>
     </div>
   </div>
 </template>
@@ -269,6 +291,11 @@ export default {
       return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     }
     
+    // Function to export all completion data
+    const exportData = () => {
+      store.dispatch('exportCompletionData');
+    }
+    
     return {
       taskIndex,
       subset,
@@ -280,8 +307,208 @@ export default {
       currentTaskId,
       showTranscript,
       formatTime,
+      exportData,
       store,
     }
   }
 }
 </script>
+
+<style lang="scss" scoped>
+.task-controls {
+  max-width: 100%;
+}
+
+.control-section {
+  margin-bottom: 24px;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0 0 12px 0;
+  color: var(--secondary-color);
+}
+
+.task-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-name {
+  font-size: 16px;
+  font-weight: bold;
+  word-break: break-word;
+  
+  .subset-prefix {
+    color: var(--primary-color);
+    font-weight: normal;
+  }
+}
+
+.completion-status {
+  display: flex;
+  align-items: center;
+  margin-top: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background-color: rgba(75, 181, 67, 0.1);
+  color: #4BB543;
+  font-size: 14px;
+  
+  .success-icon {
+    font-size: 16px;
+    margin-right: 4px;
+  }
+  
+  .completion-text {
+    font-weight: 500;
+  }
+}
+
+.task-navigation, .test-navigation {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 8px;
+}
+
+.arc-version {
+  display: inline-block;
+  background-color: var(--primary-color);
+  color: white;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
+}
+
+.counter-display {
+  width: 100%;
+  text-align: center;
+  font-weight: 500;
+  background-color: #f5f7fa;
+  padding: 8px;
+  border-radius: 4px;
+  color: var(--secondary-color);
+}
+
+.load-options {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.or-divider {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: #888;
+  
+  &::before, &::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background-color: #ddd;
+    margin: 0 8px;
+  }
+}
+
+.selection-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.subset-select, .task-index-input, .arc-select {
+  width: 100%;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+.arc-version-selector {
+  margin-bottom: 10px;
+  
+  label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+}
+
+.validate-btn, .show-solution-btn, .export-btn {
+  width: 100%;
+  margin-bottom: 8px;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.completion-info {
+  margin-top: 16px;
+  padding: 12px;
+  background-color: rgba(75, 181, 67, 0.1);
+  border-radius: 4px;
+  
+  p {
+    display: flex;
+    align-items: center;
+    margin: 0 0 8px 0;
+    
+    .success-icon {
+      margin-right: 8px;
+      color: #4BB543;
+    }
+  }
+  
+  .transcript-display {
+    margin-top: 12px;
+    background-color: white;
+    padding: 12px;
+    border-radius: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    
+    h4 {
+      margin-top: 0;
+      margin-bottom: 8px;
+    }
+    
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .selection-controls {
+    flex-direction: column;
+  }
+}
+
+.nav-button-group {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nav-btn {
+  flex: 1;
+  white-space: nowrap;
+  justify-content: center;
+  max-width: none;
+}
+</style>

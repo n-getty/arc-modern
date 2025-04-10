@@ -13,8 +13,11 @@ const API_ENDPOINTS = {
   }
 }
 
-export default createStore({
-  state: {
+export default function createAppStore(initialState = {}) {
+  return createStore({
+    state: {
+    currentUser: localStorage.getItem('arc-current-user') || '', // Store current user
+    completedTasks: {}, 
     completionData: {},
     currentTask: null,
     taskName: '',
@@ -31,10 +34,6 @@ export default createStore({
     arcVersion: 2, // Default to ARC 2
   },
   getters: {
-    getTaskCompletionData: (state) => (taskId) => {
-      // taskId format: 'version-subset-index'
-      return state.completionData[taskId] || { completed: false, time: null, transcript: null };
-   },
     isTaskCompleted: (state) => (taskId) => {
         return !!state.completionData[taskId]?.completed;
     },
@@ -51,6 +50,55 @@ export default createStore({
     },
     arcVersionName: (state) => {
       return API_ENDPOINTS[state.arcVersion]?.name || 'ARC 2'
+    },
+    // Get all completion data for a specific task
+    getTaskCompletionData: (state) => (taskId) => {
+      // First check in memory cache
+      if (state.completedTasks && state.completedTasks[taskId]) {
+        return state.completedTasks[taskId];
+      }
+      
+      // Otherwise check localStorage
+      try {
+        const storageKey = `arc-task-${taskId}`;
+        const storedData = localStorage.getItem(storageKey);
+        
+        if (storedData) {
+          const parsedData = JSON.parse(storedData);
+          
+          // Update in-memory cache
+          if (!state.completedTasks) state.completedTasks = {};
+          state.completedTasks[taskId] = parsedData;
+          
+          return parsedData;
+        }
+      } catch (e) {
+        console.error("Error retrieving from localStorage:", e);
+      }
+      
+      return { completed: false };
+    },
+    
+    // Get all completion data for export
+    getAllCompletionData: (state) => {
+      const allData = {};
+      
+      // First collect all stored data
+      try {
+        // Get all keys from localStorage that match our pattern
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('arc-task-')) {
+            const taskId = key.replace('arc-task-', '');
+            const data = JSON.parse(localStorage.getItem(key));
+            allData[taskId] = data;
+          }
+        }
+      } catch (e) {
+        console.error("Error accessing localStorage:", e);
+      }
+      
+      return allData;
     }
   },
   mutations: {
@@ -172,29 +220,118 @@ export default createStore({
       if (subset === state.currentSubset) {
         state.totalTaskCount = tasks.length
       }
-    }
-  },
-  actions: {
-    saveCompletion(state, { taskId, time, transcript }) {
-      // Create task completion data object
-      const completionData = {
-        taskId: taskId, // Store the task ID
-        time: time,
-        transcript: transcript,
-        completed: true
+    },
+    // Set current user
+    setCurrentUser(state, username) {
+      state.currentUser = username;
+      localStorage.setItem('arc-current-user', username);
+    },
+    
+    // Add task completion
+    saveCompletion(state, { taskId, time, transcript, user }) {
+      // First check if we already have data for this task
+      const storageKey = `arc-task-${taskId}`;
+      let existingData = null;
+      
+      try {
+        const storedData = localStorage.getItem(storageKey);
+        if (storedData) {
+          existingData = JSON.parse(storedData);
+        }
+      } catch (e) {
+        console.error("Error reading existing data:", e);
+      }
+      
+      // Create new completion entry
+      const newEntry = {
+        time,
+        transcript,
+        user,
+        timestamp: new Date().toISOString()
       };
       
-      // Save to localStorage (assuming you're using localStorage)
+      // Create or update completion data
+      let completionData;
+      
+      if (existingData && existingData.entries) {
+        // We already have a collection of entries
+        completionData = existingData;
+        completionData.entries.push(newEntry);
+        
+        // Update the "best" time if this is better
+        if (!completionData.time || time < completionData.time) {
+          completionData.time = time;
+          completionData.user = user;
+        }
+      } else if (existingData) {
+        // We have old format data, convert to new format
+        const oldEntry = {
+          time: existingData.time,
+          transcript: existingData.transcript,
+          user: existingData.user || 'Unknown',
+          timestamp: existingData.timestamp || new Date().toISOString()
+        };
+        
+        completionData = {
+          taskId,
+          time: Math.min(existingData.time || Infinity, time),
+          user: time < (existingData.time || Infinity) ? user : (existingData.user || 'Unknown'),
+          completed: true,
+          entries: [oldEntry, newEntry]
+        };
+      } else {
+        // First entry for this task
+        completionData = {
+          taskId,
+          time,
+          user,
+          completed: true,
+          entries: [newEntry]
+        };
+      }
+      
+      // Save to localStorage
       try {
-        const storageKey = `arc-task-${taskId}`;
         localStorage.setItem(storageKey, JSON.stringify(completionData));
         
-        // Also update state if needed
+        // Also update state
         if (!state.completedTasks) state.completedTasks = {};
         state.completedTasks[taskId] = completionData;
       } catch (e) {
         console.error("Error saving to localStorage:", e);
       }
+    }
+  },
+  actions: {
+      // Export all completion data to JSON file
+    exportCompletionData({ getters }) {
+      const allData = getters.getAllCompletionData;
+      
+      // Convert to JSON string with nice formatting
+      const jsonData = JSON.stringify(allData, null, 2);
+      
+      // Create download link
+      const blob = new Blob([jsonData], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      // Create temporary link and trigger download
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `arc-completions-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 100);
+      
+      return { success: true };
+    },
+    saveCompletion({ commit }, completionData) {
+      commit('saveCompletion', completionData);
+      return { success: true };
     },
     // Action to load saved data on app start
     initializeStore({ commit }) {
@@ -326,4 +463,5 @@ export default createStore({
       }
     }
   }
-}) 
+})
+} 

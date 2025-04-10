@@ -1,18 +1,36 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
-import store from './store'
+import createAppStore from './store' // <-- renamed import
 import './assets/styles/main.scss'
 
-// Dispatch initialization action after creating the app instance
+const loadCompletedTasksFromStorage = () => {
+  const completedTasks = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('arc-task-')) {
+        const taskId = key.replace('arc-task-', '');
+        const data = JSON.parse(localStorage.getItem(key));
+        completedTasks[taskId] = data;
+      }
+    }
+  } catch (e) {
+    console.error("Error loading tasks from localStorage:", e);
+  }
+  return completedTasks;
+};
+
+const initialState = {
+  completedTasks: loadCompletedTasksFromStorage(),
+};
+
 const app = createApp(App);
+const store = createAppStore(initialState); // ✅ use custom factory
+
 app.use(store);
 app.use(router);
 
-// Initialize store after it's used by the app
 store.dispatch('initializeStore').then(() => {
-   app.mount('#app');
+  app.mount('#app');
 });
-
-
-// createApp(App).use(store).use(router).mount('#app')
