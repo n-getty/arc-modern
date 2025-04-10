@@ -137,20 +137,29 @@ export default createStore({
         state.currentOutputGrid = Array(height).fill().map(() => Array(width).fill(0))
       }
     },
-    resizeOutputGrid(state, { height, width }) {
-      // Create a new grid with the desired dimensions
-      const newGrid = Array(height).fill().map(() => Array(width).fill(0))
+    resizeOutputGrid(state, { height, width, preserveContent, originalGrid }) {
+      // Get current grid dimensions
+      const currentGrid = state.currentOutputGrid;
+      const currentHeight = currentGrid ? currentGrid.length : 0;
+      const currentWidth = currentGrid && currentGrid.length > 0 ? currentGrid[0].length : 0;
       
-      // Copy over existing values where possible
-      if (state.currentOutputGrid) {
-        for (let i = 0; i < Math.min(height, state.currentOutputGrid.length); i++) {
-          for (let j = 0; j < Math.min(width, state.currentOutputGrid[0].length); j++) {
-            newGrid[i][j] = state.currentOutputGrid[i][j]
+      // Create a new grid with the requested dimensions
+      const newGrid = Array(height).fill().map(() => Array(width).fill(0));
+      
+      // Preserve content from original grid when possible
+      if (preserveContent && originalGrid) {
+        for (let i = 0; i < height; i++) {
+          for (let j = 0; j < width; j++) {
+            // Copy existing cell values if they exist in the original grid
+            if (i < originalGrid.length && j < originalGrid[0].length) {
+              newGrid[i][j] = originalGrid[i][j];
+            }
           }
         }
       }
       
-      state.currentOutputGrid = newGrid
+      // Update the state
+      state.currentOutputGrid = newGrid;
     },
     setSelectedSymbol(state, symbol) {
       state.selectedSymbol = symbol
@@ -166,10 +175,26 @@ export default createStore({
     }
   },
   actions: {
-    saveCompletion({ commit, state }, { time, transcript }) {
-        const taskId = `<span class="math-inline">{state.arcVersion}-</span>{state.currentSubset}-${state.currentTaskIndex}`;
-        const data = { time, transcript };
-        commit('setCompletionData', { taskId, data });
+    saveCompletion(state, { taskId, time, transcript }) {
+      // Create task completion data object
+      const completionData = {
+        taskId: taskId, // Store the task ID
+        time: time,
+        transcript: transcript,
+        completed: true
+      };
+      
+      // Save to localStorage (assuming you're using localStorage)
+      try {
+        const storageKey = `arc-task-${taskId}`;
+        localStorage.setItem(storageKey, JSON.stringify(completionData));
+        
+        // Also update state if needed
+        if (!state.completedTasks) state.completedTasks = {};
+        state.completedTasks[taskId] = completionData;
+      } catch (e) {
+        console.error("Error saving to localStorage:", e);
+      }
     },
     // Action to load saved data on app start
     initializeStore({ commit }) {

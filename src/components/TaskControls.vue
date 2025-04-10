@@ -54,13 +54,7 @@
     <div class="control-section">
       <h3 class="section-title">Validate Solution</h3>
       
-      <button 
-        class="btn btn-success validate-btn" 
-        @click="$emit('validate-solution')"
-      >
-        <span class="material-icons">check_circle</span> 
-        Submit Solution
-      </button>
+      <!-- Removed duplicate submit button -->
       
       <button 
         class="btn btn-secondary show-solution-btn" 
@@ -74,7 +68,8 @@
     <div class="control-section">
     <h3 class="section-title">Solve Puzzle</h3>
 
-    <div class="timer-display" v-if="timerStarted || formattedElapsedTime > 0"> Time: {{ formattedTimer }}
+    <div class="timer-display" v-if="timerStarted || formattedTimer !== '00:00'">
+      Time: {{ formattedTimer }}
     </div>
 
      <button
@@ -166,7 +161,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useStore } from 'vuex'
 
 export default {
@@ -220,18 +215,30 @@ export default {
   setup(props, { emit }) {
     const taskIndex = ref(props.currentTaskIndex >= 0 ? props.currentTaskIndex + 1 : 1) // Convert to 1-indexed
     const subset = ref(props.currentSubset)
+    const showTranscript = ref(false);
 
     const store = useStore();
     const selectedArcVersion = ref(store.state.arcVersion)
-    const currentTaskId = computed(() => `<span class="math-inline">{props.arcVersion}-</span>{props.currentSubset}-${props.currentTaskIndex}`); // Adjust based on actual props/state structure
-    const completionInfo = computed(() => store.getters.getTaskCompletionData(currentTaskId.value));
+    
+    // Fixed task ID format to match what we store in local storage
+    const currentTaskId = computed(() => 
+      `${store.state.arcVersion}-${props.currentSubset}-${props.currentTaskIndex}`
+    );
+    
+    const completionInfo = computed(() => 
+      store.getters.getTaskCompletionData(currentTaskId.value) || { completed: false }
+    );
 
-    onMounted(() => {
-      // Update the task index when props change
-      if (props.currentTaskIndex >= 0) {
-        taskIndex.value = props.currentTaskIndex + 1 // Convert to 1-indexed
+    // Watch for changes in props to update local state
+    watch(() => props.currentTaskIndex, (newValue) => {
+      if (newValue >= 0) {
+        taskIndex.value = newValue + 1; // Convert to 1-indexed
       }
-    })
+    });
+    
+    watch(() => props.currentSubset, (newValue) => {
+      subset.value = newValue;
+    });
     
     const handleFileUpload = (event) => {
       const file = event.target.files[0]
@@ -255,6 +262,13 @@ export default {
       taskIndex.value = 1
     }
     
+    const formatTime = (seconds) => {
+      if (!seconds && seconds !== 0) return '00:00';
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+    
     return {
       taskIndex,
       subset,
@@ -264,148 +278,10 @@ export default {
       changeArcVersion,
       completionInfo,
       currentTaskId,
+      showTranscript,
+      formatTime,
       store,
     }
   }
 }
 </script>
-
-<style lang="scss" scoped>
-.task-controls {
-  max-width: 100%;
-}
-
-.control-section {
-  margin-bottom: 24px;
-  
-  &:last-child {
-    margin-bottom: 0;
-  }
-}
-
-.section-title {
-  font-size: 16px;
-  font-weight: 500;
-  margin: 0 0 12px 0;
-  color: var(--secondary-color);
-}
-
-.task-info {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.task-name {
-  font-size: 16px;
-  font-weight: bold;
-  word-break: break-word;
-  
-  .subset-prefix {
-    color: var(--primary-color);
-    font-weight: normal;
-  }
-}
-
-.task-navigation, .test-navigation {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  gap: 8px;
-}
-
-.arc-version {
-  display: inline-block;
-  background-color: var(--primary-color);
-  color: white;
-  font-size: 12px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  margin-right: 6px;
-}
-
-.counter-display {
-  width: 100%;
-  text-align: center;
-  font-weight: 500;
-  background-color: #f5f7fa;
-  padding: 8px;
-  border-radius: 4px;
-  color: var(--secondary-color);
-}
-
-.load-options {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.or-divider {
-  display: flex;
-  align-items: center;
-  font-size: 12px;
-  color: #888;
-  
-  &::before, &::after {
-    content: "";
-    flex: 1;
-    height: 1px;
-    background-color: #ddd;
-    margin: 0 8px;
-  }
-}
-
-.selection-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-}
-
-.subset-select, .task-index-input, .arc-select {
-  width: 100%;
-  padding: 8px;
-  border-radius: 4px;
-  border: 1px solid var(--border-color);
-}
-
-.arc-version-selector {
-  margin-bottom: 10px;
-  
-  label {
-    display: block;
-    margin-bottom: 6px;
-    font-weight: 500;
-  }
-}
-
-.validate-btn, .show-solution-btn {
-  width: 100%;
-  margin-bottom: 8px;
-  
-  &:last-child {
-    margin-bottom: 0;
-  }
-}
-
-@media (max-width: 768px) {
-  .selection-controls {
-    flex-direction: column;
-  }
-}
-
-.nav-button-group {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.nav-btn {
-  flex: 1;
-  white-space: nowrap;
-  justify-content: center;
-  max-width: none;
-}
-</style> 

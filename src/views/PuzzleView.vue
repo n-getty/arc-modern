@@ -350,7 +350,16 @@
       }
       
       const resizeOutputGrid = ({ height, width }) => {
-        store.commit('resizeOutputGrid', { height, width })
+        // Store original grid
+        const originalGrid = JSON.parse(JSON.stringify(currentOutputGrid.value));
+        
+        // Commit the resize action with original grid data preserved
+        store.commit('resizeOutputGrid', { 
+          height, 
+          width,
+          preserveContent: true,
+          originalGrid
+        });
       }
       
       const copyFromInput = () => {
@@ -375,35 +384,37 @@
       
       const validateSolution = async () => {
         if (!currentOutputGrid.value || !timerRunning.value) {
-            // Optional: Show notification if timer not started
-            showNotification('Please start the timer before submitting.', 'info');
-            return; // Don't validate if timer isn't running
+          showNotification('Please start the timer before submitting.', 'info');
+          return;
         }
 
         const expectedOutput = testPairs.value[currentTestPairIndex.value]?.output;
-        const userOutput = currentOutputGrid.value; // Assuming this is reactive
+        const userOutput = currentOutputGrid.value;
 
-        // Compare userOutput with expectedOutput (implement grid comparison logic if needed)
         const isCorrect = JSON.stringify(userOutput) === JSON.stringify(expectedOutput);
 
         if (isCorrect) {
-        const finalTime = stopTimer();
-        const finalTranscript = getTranscript(); // Ensure this function exists if you added it
+          const finalTime = stopTimer();
+          const finalTranscript = getTranscript();
 
-        // *** CORRECT WAY TO SAVE DATA ***
-        try {
-            await store.dispatch('saveCompletion', { time: finalTime, transcript: finalTranscript });
+          // Create a unique task ID that includes the ARC version, subset, and task index
+          const taskId = `${store.state.arcVersion}-${currentSubset.value}-${currentTaskIndex.value}`;
+
+          try {
+            await store.dispatch('saveCompletion', { 
+              time: finalTime, 
+              transcript: finalTranscript,
+              taskId: taskId  // Add the task ID to identify the puzzle
+            });
             showNotification('Correct! Solution and data saved.', 'success');
-        } catch (error) {
+          } catch (error) {
             console.error("Error saving completion data:", error);
             showNotification('Correct, but failed to save data.', 'warning');
+          }
+        } else {
+          showNotification('Incorrect solution. Try again.', 'error');
         }
-
-        // Maybe load next task or show completion state?
-      } else {
-        showNotification('Incorrect solution. Try again.', 'error');
       }
-    }
 
       const loadInitialTask = async () => {
         const metadataResult = await store.dispatch('loadTasksMetadata', initialSubset.value)
