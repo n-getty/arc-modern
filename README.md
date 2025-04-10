@@ -48,9 +48,10 @@ This application provides an intuitive interface for exploring and solving ARC p
 ## Usage
 
 1. **Load a puzzle**: Choose between ARC-AGI 1 and ARC-AGI 2, then select a task from the training or evaluation sets.
-2. **Study examples**: Review the provided examples to understand the pattern.
-3. **Create solution**: Use the editing tools to create your solution for the test input.
-4. **Validate**: Submit your solution to check if it's correct.
+2. **Start timer**: Initiates timing and TTS transcription features.
+3. **Study examples**: Review the provided examples to understand the pattern.
+4. **Create solution**: Use the editing tools to create your solution for the test input.
+5. **Validate**: Submit your solution to check if it's correct.
 
 ## Features
 
@@ -59,6 +60,7 @@ This application provides an intuitive interface for exploring and solving ARC p
 - **Multiple Editing Tools**: Edit mode, select mode, and flood fill for efficient grid creation
 - **Symbol Picker**: Quickly select symbols with visual color indicators
 - **Responsive Design**: Works on desktops, tablets, and mobile devices
+- **Transcribe Reasoning**: Capture your reasoning trace audibly while working through the puzzle.
 
 ## Deployment
 
